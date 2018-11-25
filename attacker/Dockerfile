@@ -2,10 +2,10 @@
 FROM kalilinux/kali-linux-docker
 
 # Update and apt install programs
-RUN apt-get update && apt-get upgrade && apt install kali-linux-top10
+RUN apt update && apt -y upgrade && apt install -y kali-linux-top10 python-pip
 
 # Create known_hosts for git cloning
-RUN touch /root/.ssh/known_hosts
+RUN mkdir -p /root/.ssh && touch /root/.ssh/known_hosts
 # Add host keys
 RUN ssh-keyscan bitbucket.org >> /root/.ssh/known_hosts
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
