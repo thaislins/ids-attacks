@@ -1,33 +1,93 @@
-FROM centos:latest
-MAINTAINER Jason Ish <ish@unx.ca>
+# Snort in Docker
+FROM ubuntu:14.04.4
+
+RUN apt-get update && \
+    apt-get install -y \
+        python-setuptools \
+        python-pip \
+        python-dev \
+        wget \
+        build-essential \
+        bison \
+        flex \
+        libpcap-dev \
+        libpcre3-dev \
+        libdumbnet-dev \
+        zlib1g-dev \
+        iptables-dev \
+        libnetfilter-queue1 \
+        tcpdump \
+        unzip \
+        vim && pip install -U pip dpkt snortunsock
+
+# Define working directory.
+WORKDIR /opt
 
 ENV DAQ_VERSION 2.0.6
-ENV SNORT_VERSION 2.9.9.0
+RUN wget https://www.snort.org/downloads/archive/snort/daq-${DAQ_VERSION}.tar.gz \
+    && tar xvfz daq-${DAQ_VERSION}.tar.gz \
+    && cd daq-${DAQ_VERSION} \
+    && ./configure --enable-sourcefire --enable-perfprofiling --enable-linux-smp-stats --enable-gre  --enable-targetbased --enable-mpls \
+    &&  make && make install
 
-RUN yum -y install epel-release
-RUN yum -y install \
- https://www.snort.org/downloads/archive/snort/daq-${DAQ_VERSION}-1.centos7.x86_64.rpm \
- https://www.snort.org/downloads/archive/snort/snort-openappid-${SNORT_VERSION}-1.centos7.x86_64.rpm
 
-RUN ln -s /usr/lib64/snort-${SNORT_VERSION}_dynamicengine \
-       /usr/local/lib/snort_dynamicengine && \
-    ln -s /usr/lib64/snort-${SNORT_VERSION}_dynamicpreprocessor \
-       /usr/local/lib/snort_dynamicpreprocessor
+ENV SNORT_VERSION 2.9.8.2
+RUN wget https://www.snort.org/downloads/archive/snort/snort-${SNORT_VERSION}.tar.gz \
+    && tar xvfz snort-${SNORT_VERSION}.tar.gz \
+    && cd snort-${SNORT_VERSION} \
+    && ./configure --enable-sourcefire --enable-perfprofiling --enable-linux-smp-stats --enable-gre  --enable-targetbased --enable-mpls \
+    &&  make && make install
 
-# Enable SSH
-RUN yum -y install openssh-server openssh-clients
-RUN chkconfig sshd on
-RUN systemctl enable sshd
 
-# Cleanup.
-RUN yum clean all && \
-    rm -rf /var/log/* || true \
-    rm -rf /var/tmp/* \
-    rm -rf /tmp/*
+RUN ldconfig
 
-RUN /usr/sbin/snort -V
+# pigrelay
+# RUN wget --no-check-certificate \
+#         https://github.com/John-Lin/pigrelay/archive/master.zip \
+#     && unzip master.zip
 
-CMD ["/usr/sbin/sshd", "-D", "FOREGROUND"]
+# snortunsock
+RUN wget --no-check-certificate \
+        https://github.com/John-Lin/snortunsock/archive/master.zip \
+    && unzip master.zip
 
-# Indicate ports to expose
+# ENV SNORT_RULES_SNAPSHOT 2972
+# ADD snortrules-snapshot-${SNORT_RULES_SNAPSHOT} /opt
+ADD mysnortrules /opt
+RUN mkdir -p /var/log/snort && \
+    mkdir -p /usr/local/lib/snort_dynamicrules && \
+    mkdir -p /etc/snort && \
+    # mkdir -p /etc/snort/rules && \
+    # mkdir -p /etc/snort/preproc_rules && \
+    # mkdir -p /etc/snort/so_rules && \
+    # mkdir -p /etc/snort/etc && \
+
+    # mysnortrules rules
+    cp -r /opt/rules /etc/snort/rules && \
+    # Due to empty folder so mkdir
+    mkdir -p /etc/snort/preproc_rules && \
+    mkdir -p /etc/snort/so_rules && \
+    # cp -r /opt/preproc_rules /etc/snort/preproc_rules && \
+    # cp -r /opt/so_rules /etc/snort/so_rules && \
+    cp -r /opt/etc /etc/snort/etc && \
+
+    # snapshot2972 rules
+    # cp -r /opt/rules /etc/snort/rules && \
+    # cp -r /opt/preproc_rules /etc/snort/preproc_rules && \
+    # cp -r /opt/so_rules /etc/snort/so_rules && \
+    # cp -r /opt/etc /etc/snort/etc && \
+
+    # touch /etc/snort/rules/local.rules && \
+    touch /etc/snort/rules/white_list.rules /etc/snort/rules/black_list.rules
+
+# Clean up APT when done.
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    /opt/snort-${SNORT_VERSION}.tar.gz /opt/daq-${DAQ_VERSION}.tar.gz
+
+
 EXPOSE 80/tcp 443/tcp 22 3000/tcp
+
+ENV NETWORK_INTERFACE eth0
+# Validate an installation
+# snort -T -i eth0 -c /etc/snort/etc/snort.conf
+CMD ["snort", "-T", "-i", "echo ${NETWORK_INTERFACE}", "-c", "/etc/snort/etc/snort.conf"]

@@ -2,10 +2,10 @@
 FROM kalilinux/kali-linux-docker
 
 # Update and apt install programs
-RUN apt update && apt -y upgrade && apt install -y kali-linux-top10 python-pip
+RUN apt update && apt -y upgrade && apt -y install kali-linux-top10 && apt -y install net-tools
 
 # Create known_hosts for git cloning
-RUN mkdir -p /root/.ssh && touch /root/.ssh/known_hosts
+RUN touch /root/.ssh/known_hosts
 # Add host keys
 RUN ssh-keyscan bitbucket.org >> /root/.ssh/known_hosts
 RUN ssh-keyscan github.com >> /root/.ssh/known_hosts
@@ -22,6 +22,3 @@ ENV PATH=$PATH:/opt/powersploit
 
 # Set entrypoint and working directory
 WORKDIR /root/
-
-# Indicate we want to expose ports 80 and 443
-EXPOSE 80/tcp 443/tcp
